@@ -6,6 +6,7 @@ import android.content.AsyncTaskLoader;
 import android.content.Context;
 
 import com.j256.ormlite.dao.Dao;
+import com.j256.ormlite.dao.Dao.DaoObserver;
 
 /**
  * An abstract superclass for the ORMLite Loader classes, which closely resembles to the Android's
@@ -13,7 +14,7 @@ import com.j256.ormlite.dao.Dao;
  * 
  * @author EgorAnd
  */
-public abstract class BaseOrmLiteLoader<T, ID> extends AsyncTaskLoader<List<T>> {
+public abstract class BaseOrmLiteLoader<T, ID> extends AsyncTaskLoader<List<T>> implements DaoObserver {
 
 	/**
 	 * A Dao which will be queried for the data.
@@ -54,6 +55,8 @@ public abstract class BaseOrmLiteLoader<T, ID> extends AsyncTaskLoader<List<T>> 
 		if (takeContentChanged() || cachedResults == null) {
 			forceLoad();
 		}
+		// watch for data changes
+		dao.registerObserver(this);
 	}
 
 	/**
@@ -75,6 +78,13 @@ public abstract class BaseOrmLiteLoader<T, ID> extends AsyncTaskLoader<List<T>> 
 			cachedResults.clear();
 			cachedResults = null;
 		}
+
+		// stop watching for changes
+		dao.unregisterObserver(this);
+	}
+
+	public void onChange() {
+		onContentChanged();
 	}
 
 	public void setDao(Dao<T, ID> dao) {

@@ -29,6 +29,9 @@ public class JellyBeanApiCompatibility extends BasicApiCompatibility {
 		return new JellyBeanCancellationHook();
 	}
 
+	/**
+	 * Hook object that supports canceling a running query. 
+	 */
 	protected static class JellyBeanCancellationHook implements CancellationHook {
 
 		private final CancellationSignal cancellationSignal;

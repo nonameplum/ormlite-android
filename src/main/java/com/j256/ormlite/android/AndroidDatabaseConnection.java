@@ -1,5 +1,6 @@
 package com.j256.ormlite.android;
 
+import java.io.IOException;
 import java.sql.SQLException;
 import java.sql.Savepoint;
 
@@ -12,6 +13,7 @@ import com.j256.ormlite.field.FieldType;
 import com.j256.ormlite.field.SqlType;
 import com.j256.ormlite.logger.Logger;
 import com.j256.ormlite.logger.LoggerFactory;
+import com.j256.ormlite.misc.IOUtils;
 import com.j256.ormlite.misc.SqlExceptionUtil;
 import com.j256.ormlite.misc.VersionUtils;
 import com.j256.ormlite.stmt.GenericRowMapper;
@@ -168,9 +170,7 @@ public class AndroidDatabaseConnection implements DatabaseConnection {
 		} catch (android.database.SQLException e) {
 			throw SqlExceptionUtil.create("inserting to database failed: " + statement, e);
 		} finally {
-			if (stmt != null) {
-				stmt.close();
-			}
+			closeQuietly(stmt);
 		}
 	}
 
@@ -203,9 +203,7 @@ public class AndroidDatabaseConnection implements DatabaseConnection {
 		} catch (android.database.SQLException e) {
 			throw SqlExceptionUtil.create("queryForOne from database failed: " + statement, e);
 		} finally {
-			if (cursor != null) {
-				cursor.close();
-			}
+			closeQuietly(cursor);
 		}
 	}
 
@@ -219,17 +217,16 @@ public class AndroidDatabaseConnection implements DatabaseConnection {
 		} catch (android.database.SQLException e) {
 			throw SqlExceptionUtil.create("queryForLong from database failed: " + statement, e);
 		} finally {
-			if (stmt != null) {
-				stmt.close();
-			}
+			closeQuietly(stmt);
 		}
 	}
 
 	public long queryForLong(String statement, Object[] args, FieldType[] argFieldTypes) throws SQLException {
 		Cursor cursor = null;
+		AndroidDatabaseResults results = null;
 		try {
 			cursor = db.rawQuery(statement, toStrings(args));
-			AndroidDatabaseResults results = new AndroidDatabaseResults(cursor, null);
+			results = new AndroidDatabaseResults(cursor, null);
 			long result;
 			if (results.first()) {
 				result = results.getLong(0);
@@ -241,27 +238,22 @@ public class AndroidDatabaseConnection implements DatabaseConnection {
 		} catch (android.database.SQLException e) {
 			throw SqlExceptionUtil.create("queryForLong from database failed: " + statement, e);
 		} finally {
-			if (cursor != null) {
-				cursor.close();
-			}
+			closeQuietly(cursor);
+			IOUtils.closeQuietly(results);
 		}
 	}
 
-	public void close() throws SQLException {
+	public void close() throws IOException {
 		try {
 			db.close();
 			logger.trace("{}: db {} closed", this, db);
 		} catch (android.database.SQLException e) {
-			throw SqlExceptionUtil.create("problems closing the database connection", e);
+			throw new IOException("problems closing the database connection", e);
 		}
 	}
 
 	public void closeQuietly() {
-		try {
-			close();
-		} catch (SQLException e) {
-			// ignored
-		}
+		IOUtils.closeQuietly(this);
 	}
 
 	public boolean isClosed() throws SQLException {
@@ -300,10 +292,8 @@ public class AndroidDatabaseConnection implements DatabaseConnection {
 		} catch (android.database.SQLException e) {
 			throw SqlExceptionUtil.create("updating database failed: " + statement, e);
 		} finally {
-			if (stmt != null) {
-				stmt.close();
-				stmt = null;
-			}
+			closeQuietly(stmt);
+			stmt = null;
 		}
 		int result;
 		try {
@@ -313,9 +303,7 @@ public class AndroidDatabaseConnection implements DatabaseConnection {
 			// ignore the exception and just return 1
 			result = 1;
 		} finally {
-			if (stmt != null) {
-				stmt.close();
-			}
+			closeQuietly(stmt);
 		}
 		logger.trace("{} statement is compiled and executed, changed {}: {}", label, result, statement);
 		return result;
@@ -387,6 +375,24 @@ public class AndroidDatabaseConnection implements DatabaseConnection {
 	@Override
 	public String toString() {
 		return getClass().getSimpleName() + "@" + Integer.toHexString(super.hashCode());
+	}
+
+	/**
+	 * We can't use IOUtils here because older versions didn't implement Closeable.
+	 */
+	private void closeQuietly(Cursor cursor) {
+		if (cursor != null) {
+			cursor.close();
+		}
+	}
+
+	/**
+	 * We can't use IOUtils here because older versions didn't implement Closeable.
+	 */
+	private void closeQuietly(SQLiteStatement statement) {
+		if (statement != null) {
+			statement.close();
+		}
 	}
 
 	private static class OurSavePoint implements Savepoint {
